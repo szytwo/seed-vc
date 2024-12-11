@@ -303,15 +303,13 @@ async def download(name:str):
 def voice_conversion(source, target, diffusion_steps, length_adjust, inference_cfg_rate, f0_condition, auto_f0_adjust,
                      pitch_shift):
 
-    logging.info(source, 
-                 target, 
-                 diffusion_steps, 
-                 length_adjust, 
-                 inference_cfg_rate, 
-                 f0_condition, 
-                 auto_f0_adjust, 
-                 pitch_shift)
-    
+    logging.info(
+        f"Source: {source}, Target: {target}, Diffusion Steps: {diffusion_steps}, "
+        f"Length Adjust: {length_adjust}, Inference CFG Rate: {inference_cfg_rate}, "
+        f"F0 Condition: {f0_condition}, Auto F0 Adjust: {auto_f0_adjust}, "
+        f"Pitch Shift: {pitch_shift}"
+    )
+
     # streaming and chunk processing related params
     max_context_window = sr_fn // hop_length_fn * 30
     overlap_frame_len = 16
