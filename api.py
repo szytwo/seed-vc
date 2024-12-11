@@ -569,7 +569,7 @@ if __name__ == "__main__":
     try:
         args = parser.parse_args()
 
-        cuda=args.cuda
+        cuda = args.cuda
         device = torch.device(f"cuda:{cuda}" if torch.cuda.is_available() else "cpu")
 
         inference_module, mel_fn, bigvgan_fn, sr_fn, hop_length_fn, whisper_feature_extractor, whisper_model, campplus_model, rmvpe, speechtokenizer_set = load_models(
@@ -587,6 +587,8 @@ if __name__ == "__main__":
                                                 args.f0_condition, 
                                                 args.auto_f0_adjust, 
                                                 args.semi_tone_shift)
+            
+            clear_cuda_cache()
     except Exception as e:
         clear_cuda_cache()
         logging.error(e)
