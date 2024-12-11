@@ -303,7 +303,15 @@ async def download(name:str):
 def voice_conversion(source, target, diffusion_steps, length_adjust, inference_cfg_rate, f0_condition, auto_f0_adjust,
                      pitch_shift):
 
-    print(source, target, diffusion_steps, length_adjust, inference_cfg_rate, f0_condition, auto_f0_adjust, pitch_shift)
+    logging.info(source, 
+                 target, 
+                 diffusion_steps, 
+                 length_adjust, 
+                 inference_cfg_rate, 
+                 f0_condition, 
+                 auto_f0_adjust, 
+                 pitch_shift)
+    
     # streaming and chunk processing related params
     max_context_window = sr_fn // hop_length_fn * 30
     overlap_frame_len = 16
@@ -312,14 +320,14 @@ def voice_conversion(source, target, diffusion_steps, length_adjust, inference_c
     source_audio = librosa.load(source, sr=sr_fn)[0]
     ref_audio = librosa.load(target, sr=sr_fn)[0]
 
-    print(f"source_audio最大幅度1: {source_audio.max()}")
-    print(f"ref_audio最大幅度1: {ref_audio.max()}")
+    logging.info(f"source_audio最大幅度1: {source_audio.max()}")
+    logging.info(f"ref_audio最大幅度1: {ref_audio.max()}")
     # 归一化音频幅度
     source_audio = source_audio / max(abs(source_audio))  # 归一化到[-1, 1]范围
     ref_audio = ref_audio / max(abs(ref_audio))  # 归一化到[-1, 1]范围
 
-    print(f"source_audio最大幅度2: {source_audio.max()}")
-    print(f"ref_audio最大幅度2: {ref_audio.max()}")
+    logging.info(f"source_audio最大幅度2: {source_audio.max()}")
+    logging.info(f"ref_audio最大幅度2: {ref_audio.max()}")
     # Process audio
     source_audio = torch.tensor(source_audio).unsqueeze(0).float().to(device)
     ref_audio = torch.tensor(ref_audio[:sr_fn * 25]).unsqueeze(0).float().to(device)
@@ -327,17 +335,17 @@ def voice_conversion(source, target, diffusion_steps, length_adjust, inference_c
     # Resample
     ref_waves_16k = torchaudio.functional.resample(ref_audio, sr_fn, 16000)
 
-    print(f"ref_waves_16k最大幅度1: {ref_waves_16k.max()}")
+    logging.info(f"ref_waves_16k最大幅度1: {ref_waves_16k.max()}")
     # 归一化音频幅度
     # ref_waves_16k = ref_waves_16k / ref_waves_16k.abs().max()
-    # print(f"ref_waves_16k最大幅度2: {ref_waves_16k.max()}")
+    # logging.info(f"ref_waves_16k最大幅度2: {ref_waves_16k.max()}")
 
     converted_waves_16k = torchaudio.functional.resample(source_audio, sr_fn, 16000)
-    print(f"converted_waves_16k最大幅度1: {converted_waves_16k.max()}")
+    logging.info(f"converted_waves_16k最大幅度1: {converted_waves_16k.max()}")
 
     # 归一化音频幅度
     # converted_waves_16k = converted_waves_16k / converted_waves_16k.abs().max()
-    # print(f"converted_waves_16k最大幅度2: {converted_waves_16k.max()}")
+    # logging.info(f"converted_waves_16k最大幅度2: {converted_waves_16k.max()}")
 
     # if source audio less than 30 seconds, whisper can handle in one forward
     if converted_waves_16k.size(-1) <= 16000 * 30:
@@ -540,7 +548,7 @@ def voice_conversion_save(source, target, output, diffusion_steps, length_adjust
 
         audio_with_increased_volume.export(output, format="wav")
 
-    print(f"write: {output}")
+    logging.info(f"write: {output}")
 
     return output
 
