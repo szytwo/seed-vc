@@ -22,3 +22,13 @@ reconstructed/
 .python-version
 ruff.log
 /configs/inuse/
+
+*.whl
+
+results/
+error/
+venv/
+example/
+
+go-api.bat
+go-api-conda.bat
