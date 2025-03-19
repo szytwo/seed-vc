@@ -25,7 +25,9 @@ from tqdm import tqdm
 # 禁用第三方库的日志级别
 logging.getLogger("funasr_onnx").setLevel(logging.WARNING)
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
-
+# 清理根日志记录器的处理器
+for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
 # 设置日志格式
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 # 创建日志目录（如果不存在）
@@ -54,11 +56,6 @@ class DatedFileHandler(TimedRotatingFileHandler):
         """重写 doRollover 方法，按日期生成新文件名"""
         self.baseFilename = get_dated_log_filename()  # 更新文件名
         super().doRollover()  # 调用父类的 doRollover 方法
-
-
-# 清理根日志记录器的处理器
-for handler in logging.root.handlers[:]:
-    logging.root.removeHandler(handler)
 
 
 # 自定义一个 TqdmLoggingHandler
