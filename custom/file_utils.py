@@ -16,12 +16,45 @@
 import json
 import logging
 import os
+import shutil
+import time
 import torchaudio
+from logging.handlers import TimedRotatingFileHandler
 from tqdm import tqdm
 
 # 禁用第三方库的日志级别
 logging.getLogger("funasr_onnx").setLevel(logging.WARNING)
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
+
+# 设置日志格式
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+# 创建日志目录（如果不存在）
+log_dir = "logs"
+os.makedirs(log_dir, exist_ok=True)
+
+
+# 自定义按日期命名的文件名生成函数
+def get_dated_log_filename():
+    """生成按日期命名的日志文件名，格式为 YYYYMMDD.log"""
+    return os.path.join(log_dir, time.strftime("%Y%m%d") + ".log")
+
+
+# 自定义 TimedRotatingFileHandler，按日期命名文件
+class DatedFileHandler(TimedRotatingFileHandler):
+    def __init__(self):
+        super().__init__(
+            filename=get_dated_log_filename(),  # 初始文件名
+            when="midnight",  # 每天午夜切割
+            interval=1,  # 间隔 1 天
+            backupCount=7,  # 保留最近 7 天的日志文件
+            encoding="utf-8",  # 设置文件编码
+        )
+
+    def doRollover(self):
+        """重写 doRollover 方法，按日期生成新文件名"""
+        self.baseFilename = get_dated_log_filename()  # 更新文件名
+        super().doRollover()  # 调用父类的 doRollover 方法
+
 
 # 清理根日志记录器的处理器
 for handler in logging.root.handlers[:]:
@@ -38,11 +71,16 @@ class TqdmLoggingHandler(logging.Handler):
             self.handleError(record)
 
 
-# 重新配置日志
+# 创建 DatedFileHandler
+file_handler = DatedFileHandler()
+file_handler.setFormatter(formatter)
+# 创建 TqdmLoggingHandler
+tqdm_handler = TqdmLoggingHandler()
+tqdm_handler.setFormatter(formatter)
+
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s %(levelname)s %(message)s',
-    handlers=[TqdmLoggingHandler()]  # 使用自定义 Handler
+    handlers=[file_handler, tqdm_handler]  # 同时使用文件 Handler 和 Tqdm Handler
 )
 
 
