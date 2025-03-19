@@ -1,31 +1,35 @@
-import os
 import argparse
 import gradio as gr
+import librosa
+import numpy as np
+import os
+import time
 import torch
 import torchaudio
-import librosa
-import yaml
-import numpy as np
 import uvicorn
-import time
-from modules.commons import build_model, load_checkpoint, recursive_munch
-from hf_utils import load_custom_model_from_hf
-from pydub import AudioSegment
-from pydub.effects import normalize
-from math import log10
-from fastapi import FastAPI, File,UploadFile, Request
+import yaml
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, File, UploadFile, Request
+from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, PlainTextResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.openapi.docs import get_swagger_ui_html
-from starlette.middleware.cors import CORSMiddleware  #引入 CORS中间件模块
-from contextlib import asynccontextmanager
-from custom.file_utils import logging
+from math import log10
+from pydub import AudioSegment
+from pydub.effects import normalize
+from starlette.middleware.cors import CORSMiddleware  # 引入 CORS中间件模块
+
 from custom.TextProcessor import TextProcessor
+from custom.file_utils import logging, delete_old_files_and_folders
+from hf_utils import load_custom_model_from_hf
+from modules.commons import build_model, load_checkpoint, recursive_munch
 
 # Load model and configuration
 # cuda:<index> 来指定特定的 GPU，其中 <index> 是显卡的编号，例如："cuda:0"
-#device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+# device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 global device, args
+
+result_dir = 'reconstructed'
+
 
 def load_models(f0_condition):
     if not f0_condition:
@@ -118,15 +122,18 @@ def load_models(f0_condition):
 
     return model, to_mel, bigvgan_model, sr, hop_length, whisper_feature_extractor, whisper_model, campplus_model, rmvpe, speechtokenizer_set
 
+
 def adjust_f0_semitones(f0_sequence, n_semitones):
     factor = 2 ** (n_semitones / 12)
     return f0_sequence * factor
+
 
 def crossfade(chunk1, chunk2, overlap):
     fade_out = np.cos(np.linspace(0, np.pi / 2, overlap)) ** 2
     fade_in = np.cos(np.linspace(np.pi / 2, 0, overlap)) ** 2
     chunk2[:overlap] = chunk2[:overlap] * fade_in + chunk1[-overlap:] * fade_out
     return chunk2
+
 
 def webui():
     description = (
@@ -172,6 +179,7 @@ def webui():
                  cache_examples=False,
                  ).launch()
 
+
 # 定义一个函数进行显存清理
 def clear_cuda_cache():
     """
@@ -191,27 +199,21 @@ def clear_cuda_cache():
         # 重置统计信息
         torch.cuda.reset_peak_memory_stats()
 
-#设置允许访问的域名
-origins = ["*"]  #"*"，即为所有。
 
-# 定义 FastAPI 应用
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # 在应用启动时加载模型
-    logging.info("Application loaded successfully!")
-    yield  # 这里是应用运行的时间段
-    logging.info("Application shutting down...")  # 在这里可以释放资源   
-    clear_cuda_cache()
+# 设置允许访问的域名
+origins = ["*"]  # "*"，即为所有。
 
-app = FastAPI(docs_url=None, lifespan=lifespan)
+app = FastAPI(docs_url=None)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  #设置允许的origins来源
+    allow_origins=origins,  # 设置允许的origins来源
     allow_credentials=True,
     allow_methods=["*"],  # 设置允许跨域的http方法，比如 get、post、put等。
-    allow_headers=["*"])  #允许跨域的headers，可以用来鉴别来源等作用。
+    allow_headers=["*"])  # 允许跨域的headers，可以用来鉴别来源等作用。
 # 挂载静态文件
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
 # 使用本地的 Swagger UI 静态资源
 @app.get("/docs", include_in_schema=False)
 async def custom_swagger_ui_html():
@@ -223,26 +225,6 @@ async def custom_swagger_ui_html():
         swagger_css_url="/static/swagger-ui/5.9.0/swagger-ui.css",
     )
 
-@app.middleware("http")
-async def clear_gpu_after_request(request: Request, call_next):
-    try:
-        response = await call_next(request)
-        return response
-    finally:
-        clear_cuda_cache()
-# 自定义异常处理器
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    logging.info(f"Exception during request {request.url}: {exc}")
-
-    clear_cuda_cache()
-    # 记录错误信息
-    TextProcessor.log_error(exc)
-
-    return JSONResponse(
-        {"errcode": 500, "errmsg": "Internal Server Error"},
-        status_code=500
-    )
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
@@ -258,51 +240,55 @@ async def root():
         </body>
     </html>
     """
+
+
 @app.get("/test")
-async  def test():
+async def test():
     return PlainTextResponse('success')
 
+
 @app.post('/do')
-async def do(source:UploadFile = File(...)
-             ,target:UploadFile = File(...)
-             ,diffusion_steps:int=60
-             ,length_adjust:float=1.0
-             ,inference_cfg_rate:float=0.7
-             ,f0_condition:bool=False
-             ,auto_f0_adjust:bool=False
-             ,semi_tone_shift:int=0):
+async def do(source: UploadFile = File(...)
+             , target: UploadFile = File(...)
+             , diffusion_steps: int = 60
+             , length_adjust: float = 1.0
+             , inference_cfg_rate: float = 0.7
+             , f0_condition: bool = False
+             , auto_f0_adjust: bool = False
+             , semi_tone_shift: int = 0):
     timestamp = time.time()
-    sext=source.filename.split('.')[-1]
-    text=target.filename.split('.')[-1]
-    source_path = f"reconstructed/s{timestamp}.{sext}"
-    target_path = f"reconstructed/t{timestamp}.{text}"
-    output_path=f"reconstructed/o{timestamp}.wav"
+    sext = source.filename.split('.')[-1]
+    text = target.filename.split('.')[-1]
+    source_path = f"{result_dir}/s{timestamp}.{sext}"
+    target_path = f"{result_dir}/t{timestamp}.{text}"
+    output_path = f"{result_dir}/o{timestamp}.wav"
     with open(source_path, "wb") as f:
         f.write(await source.read())
     with open(target_path, "wb") as f:
         f.write(await target.read())
 
-    output_path =  voice_conversion_save(source_path, 
-                                        target_path, 
-                                        output_path, 
-                                        diffusion_steps, 
-                                        length_adjust, 
-                                        inference_cfg_rate, 
-                                        f0_condition, 
-                                        auto_f0_adjust, 
+    output_path = voice_conversion_save(source_path,
+                                        target_path,
+                                        output_path,
+                                        diffusion_steps,
+                                        length_adjust,
+                                        inference_cfg_rate,
+                                        f0_condition,
+                                        auto_f0_adjust,
                                         semi_tone_shift)
-    #return FileResponse(path=f'{output_path}', filename=f'o{timestamp}.wav', media_type='application/octet-stream')
+    # return FileResponse(path=f'{output_path}', filename=f'o{timestamp}.wav', media_type='application/octet-stream')
     return PlainTextResponse(f'o{timestamp}.wav')
 
+
 @app.get('/download')
-async def download(name:str):
-    return FileResponse(path=f'reconstructed/{name}', filename=name, media_type='application/octet-stream')
+async def download(name: str):
+    return FileResponse(path=f'{result_dir}/{name}', filename=name, media_type='application/octet-stream')
+
 
 @torch.no_grad()
 @torch.inference_mode()
 def voice_conversion(source, target, diffusion_steps, length_adjust, inference_cfg_rate, f0_condition, auto_f0_adjust,
                      pitch_shift):
-
     logging.info(
         f"Source: {source}, Target: {target}, Diffusion Steps: {diffusion_steps}, "
         f"Length Adjust: {length_adjust}, Inference CFG Rate: {inference_cfg_rate}, "
@@ -503,7 +489,8 @@ def voice_conversion(source, target, diffusion_steps, length_adjust, inference_c
 
     return generated_wave_chunks, sr_fn
 
-def increase_volume_safely(audio, volume_multiplier = 1.0):
+
+def increase_volume_safely(audio, volume_multiplier=1.0):
     # 1. 归一化音频到最大范围，确保音频峰值不超过 0 dB
     audio = normalize(audio)
     # 2. 根据倍数计算增益的分贝值
@@ -513,42 +500,54 @@ def increase_volume_safely(audio, volume_multiplier = 1.0):
 
     return audio
 
-def voice_conversion_save(source, target, output, diffusion_steps, length_adjust, inference_cfg_rate, f0_condition, auto_f0_adjust, semi_tone_shift):
-    # 检查文件是否存在，若存在则删除
-    if os.path.exists(output):
-        os.remove(output)
 
-    generated_wave_chunks, sr_fn = voice_conversion(source, target, diffusion_steps, length_adjust,
-                                                    inference_cfg_rate, f0_condition, auto_f0_adjust,
-                                                    semi_tone_shift)
+def voice_conversion_save(source, target, output, diffusion_steps, length_adjust, inference_cfg_rate, f0_condition,
+                          auto_f0_adjust, semi_tone_shift):
+    try:
+        # 检查文件是否存在，若存在则删除
+        if os.path.exists(output):
+            os.remove(output)
 
-    # 如果已经生成了全部音频，返回拼接后的音频
-    if len(generated_wave_chunks) > 0:
-        complete_wave = np.concatenate(generated_wave_chunks)
-        # 检查并替换 NaN 和 Inf
-        complete_wave = np.nan_to_num(complete_wave, nan=0.0, posinf=0.0, neginf=0.0)
-        # 归一化到 [-1, 1]
-        #complete_wave = complete_wave / np.abs(complete_wave).max()
+        generated_wave_chunks, sr_fn = voice_conversion(source, target, diffusion_steps, length_adjust,
+                                                        inference_cfg_rate, f0_condition, auto_f0_adjust,
+                                                        semi_tone_shift)
 
-        if complete_wave.dtype != np.int16:
-            complete_wave = (complete_wave * 32768.0).astype(np.int16)
+        # 如果已经生成了全部音频，返回拼接后的音频
+        if len(generated_wave_chunks) > 0:
+            complete_wave = np.concatenate(generated_wave_chunks)
+            # 检查并替换 NaN 和 Inf
+            complete_wave = np.nan_to_num(complete_wave, nan=0.0, posinf=0.0, neginf=0.0)
+            # 归一化到 [-1, 1]
+            # complete_wave = complete_wave / np.abs(complete_wave).max()
 
-        # 此处可以在生成完音频后，返回拼接的完整音频文件
-        # 输出拼接后的音频文件到目标路径
-        audio_segment = AudioSegment(
-            complete_wave.tobytes(), frame_rate=sr_fn,
-            sample_width=complete_wave.dtype.itemsize, channels=1
-        )
-        # 设置要增加的音量倍数
-        volume_multiplier = 3.0  # 音量倍数
-        # 安全地增加音量
-        audio_with_increased_volume = increase_volume_safely(audio_segment, volume_multiplier)
+            if complete_wave.dtype != np.int16:
+                complete_wave = (complete_wave * 32768.0).astype(np.int16)
 
-        audio_with_increased_volume.export(output, format="wav")
+            # 此处可以在生成完音频后，返回拼接的完整音频文件
+            # 输出拼接后的音频文件到目标路径
+            audio_segment = AudioSegment(
+                complete_wave.tobytes(), frame_rate=sr_fn,
+                sample_width=complete_wave.dtype.itemsize, channels=1
+            )
+            # 设置要增加的音量倍数
+            volume_multiplier = 3.0  # 音量倍数
+            # 安全地增加音量
+            audio_with_increased_volume = increase_volume_safely(audio_segment, volume_multiplier)
 
-    logging.info(f"write: {output}")
+            audio_with_increased_volume.export(output, format="wav")
 
+        logging.info(f"write: {output}")
+    except Exception as e:
+        TextProcessor.log_error(e)
+        errmsg = f"音频生成失败，错误信息：{str(e)}"
+        logging.error(errmsg)
+    finally:
+        # 删除过期文件
+        delete_old_files_and_folders(result_output_dir, 1)
+        delete_old_files_and_folders(result_input_dir, 1)
+        clear_cuda_cache()
     return output
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -564,7 +563,7 @@ if __name__ == "__main__":
     parser.add_argument("--cuda", type=int, default=0)
     parser.add_argument("--api", type=bool, default=False)
     parser.add_argument("--port", type=int, default=7869)
-    #parser.add_argument("--webui",type=bool,default=False)
+    # parser.add_argument("--webui",type=bool,default=False)
 
     try:
         args = parser.parse_args()
@@ -575,21 +574,19 @@ if __name__ == "__main__":
         inference_module, mel_fn, bigvgan_fn, sr_fn, hop_length_fn, whisper_feature_extractor, whisper_model, campplus_model, rmvpe, speechtokenizer_set = load_models(
             args.f0_condition)
 
-        if(args.api):
+        if args.api:
             uvicorn.run(app, host="0.0.0.0", port=args.port)
         else:
-            output_path =  voice_conversion_save(args.source, 
-                                                args.target, 
-                                                args.output, 
-                                                args.diffusion_steps, 
-                                                args.length_adjust, 
-                                                args.inference_cfg_rate, 
-                                                args.f0_condition, 
-                                                args.auto_f0_adjust, 
+            output_path = voice_conversion_save(args.source,
+                                                args.target,
+                                                args.output,
+                                                args.diffusion_steps,
+                                                args.length_adjust,
+                                                args.inference_cfg_rate,
+                                                args.f0_condition,
+                                                args.auto_f0_adjust,
                                                 args.semi_tone_shift)
-            
-            clear_cuda_cache()
-    except Exception as e:
-        clear_cuda_cache()
-        logging.error(e)
+
+    except Exception as ex:
+        logging.error(ex)
         exit(0)
