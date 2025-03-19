@@ -267,15 +267,17 @@ async def do(source: UploadFile = File(...)
     with open(target_path, "wb") as f:
         f.write(await target.read())
 
-    output_path = voice_conversion_save(source_path,
-                                        target_path,
-                                        output_path,
-                                        diffusion_steps,
-                                        length_adjust,
-                                        inference_cfg_rate,
-                                        f0_condition,
-                                        auto_f0_adjust,
-                                        semi_tone_shift)
+    output_path = voice_conversion_save(
+        source=source_path,
+        target=target_path,
+        output=output_path,
+        diffusion_steps=diffusion_steps,
+        length_adjust=length_adjust,
+        inference_cfg_rate=inference_cfg_rate,
+        f0_condition=f0_condition,
+        auto_f0_adjust=auto_f0_adjust,
+        semi_tone_shift=semi_tone_shift
+    )
     # return FileResponse(path=f'{output_path}', filename=f'o{timestamp}.wav', media_type='application/octet-stream')
     return PlainTextResponse(f'o{timestamp}.wav')
 
@@ -543,8 +545,7 @@ def voice_conversion_save(source, target, output, diffusion_steps, length_adjust
         logging.error(errmsg)
     finally:
         # 删除过期文件
-        delete_old_files_and_folders(result_output_dir, 1)
-        delete_old_files_and_folders(result_input_dir, 1)
+        delete_old_files_and_folders(result_dir, 1)
         clear_cuda_cache()
     return output
 
@@ -577,15 +578,17 @@ if __name__ == "__main__":
         if args.api:
             uvicorn.run(app, host="0.0.0.0", port=args.port)
         else:
-            output_path = voice_conversion_save(args.source,
-                                                args.target,
-                                                args.output,
-                                                args.diffusion_steps,
-                                                args.length_adjust,
-                                                args.inference_cfg_rate,
-                                                args.f0_condition,
-                                                args.auto_f0_adjust,
-                                                args.semi_tone_shift)
+            voice_conversion_save(
+                source=args.source,
+                target=args.target,
+                output=args.output,
+                diffusion_steps=args.diffusion_steps,
+                length_adjust=args.length_adjust,
+                inference_cfg_rate=args.inference_cfg_rate,
+                f0_condition=args.f0_condition,
+                auto_f0_adjust=args.auto_f0_adjust,
+                semi_tone_shift=args.semi_tone_shift
+            )
 
     except Exception as ex:
         logging.error(ex)
