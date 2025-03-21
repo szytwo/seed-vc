@@ -26,8 +26,8 @@ from modules.commons import build_model, load_checkpoint, recursive_munch
 # Load model and configuration
 # cuda:<index> 来指定特定的 GPU，其中 <index> 是显卡的编号，例如："cuda:0"
 # device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
-global device, args
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 result_dir = 'reconstructed'
 
 
@@ -561,16 +561,12 @@ if __name__ == "__main__":
     parser.add_argument("--f0-condition", type=bool, default=False)
     parser.add_argument("--auto-f0-adjust", type=bool, default=False)
     parser.add_argument("--semi-tone-shift", type=int, default=0)
-    parser.add_argument("--cuda", type=int, default=0)
     parser.add_argument("--api", type=bool, default=False)
     parser.add_argument("--port", type=int, default=7869)
     # parser.add_argument("--webui",type=bool,default=False)
 
     try:
         args = parser.parse_args()
-
-        cuda = args.cuda
-        device = torch.device(f"cuda:{cuda}" if torch.cuda.is_available() else "cpu")
 
         inference_module, mel_fn, bigvgan_fn, sr_fn, hop_length_fn, whisper_feature_extractor, whisper_model, campplus_model, rmvpe, speechtokenizer_set = load_models(
             args.f0_condition)
