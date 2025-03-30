@@ -493,12 +493,13 @@ def voice_conversion(source, target, diffusion_steps, length_adjust, inference_c
 
 
 def increase_volume_safely(audio, volume_multiplier=1.0):
-    # 1. 归一化音频到最大范围，确保音频峰值不超过 0 dB
-    audio = normalize(audio)
-    # 2. 根据倍数计算增益的分贝值
-    gain_in_db = 20 * log10(volume_multiplier)  # 按倍数计算增益
-    # 3. 增加音量
-    audio = audio.apply_gain(gain_in_db)
+    if volume_multiplier != 1.0:
+        # 1. 归一化音频到最大范围，确保音频峰值不超过 0 dB
+        audio = normalize(audio)
+        # 2. 根据倍数计算增益的分贝值
+        gain_in_db = 20 * log10(volume_multiplier)  # 按倍数计算增益
+        # 3. 增加音量
+        audio = audio.apply_gain(gain_in_db)
 
     return audio
 
@@ -532,7 +533,7 @@ def voice_conversion_save(source, target, output, diffusion_steps, length_adjust
                 sample_width=complete_wave.dtype.itemsize, channels=1
             )
             # 设置要增加的音量倍数
-            volume_multiplier = 3.0  # 音量倍数
+            volume_multiplier = 1.0  # 音量倍数
             # 安全地增加音量
             audio_with_increased_volume = increase_volume_safely(audio_segment, volume_multiplier)
 
