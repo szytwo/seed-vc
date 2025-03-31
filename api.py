@@ -257,6 +257,9 @@ async def do(source: UploadFile = File(...)
              , f0_condition: bool = False
              , auto_f0_adjust: bool = False
              , semi_tone_shift: int = 0):
+    # 记录开始时间
+    start_time = time.time()
+
     timestamp = time.time()
     sext = source.filename.split('.')[-1]
     text = target.filename.split('.')[-1]
@@ -279,6 +282,11 @@ async def do(source: UploadFile = File(...)
         auto_f0_adjust=auto_f0_adjust,
         semi_tone_shift=semi_tone_shift
     )
+
+    # 计算耗时
+    elapsed = time.time() - start_time
+    logging.info(f"生成完成，用时: {elapsed}")
+
     # return FileResponse(path=f'{output_path}', filename=f'o{timestamp}.wav', media_type='application/octet-stream')
     return PlainTextResponse(f'o{timestamp}.wav')
 
@@ -445,19 +453,34 @@ def voice_conversion(source, target, diffusion_steps, length_adjust, inference_c
         shifted_f0_alt = None
 
     # Length regulation
-    cond, _, codes, commitment_loss, codebook_loss = inference_module.length_regulator(S_alt, ylens=target_lengths,
-                                                                                       n_quantizers=3,
-                                                                                       f0=shifted_f0_alt)
-    prompt_condition, _, codes, commitment_loss, codebook_loss = inference_module.length_regulator(S_ori,
-                                                                                                   ylens=target2_lengths,
-                                                                                                   n_quantizers=3,
-                                                                                                   f0=F0_ori)
+    (cond,
+     _,
+     codes,
+     commitment_loss,
+     codebook_loss) = inference_module.length_regulator(
+        S_alt, ylens=target_lengths,
+        n_quantizers=3,
+        f0=shifted_f0_alt
+    )
+
+    (prompt_condition,
+     _,
+     codes,
+     commitment_loss,
+     codebook_loss) = inference_module.length_regulator(
+        S_ori,
+        ylens=target2_lengths,
+        n_quantizers=3,
+        f0=F0_ori
+    )
 
     max_source_window = max_context_window - mel2.size(2)
     # split source condition (cond) into chunks
     processed_frames = 0
     generated_wave_chunks = []
-    # generate chunk by chunk and stream the output
+
+    logging.info(f"generate chunk by chunk and stream the output...")
+
     while processed_frames < cond.size(1):
         chunk_cond = cond[:, processed_frames:processed_frames + max_source_window]
         is_last_chunk = processed_frames + max_source_window >= cond.size(1)

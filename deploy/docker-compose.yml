@@ -14,9 +14,11 @@ services:
       - d:/AI/seed-vc/error:/code/error
       - d:/AI/seed-vc/logs:/code/logs
     environment:
+      - TQDM_DISABLE=1 # 全局关闭进度条显示
       - PYTHONUNBUFFERED=1 # 取消标准输出缓冲
       - CUDA_VISIBLE_DEVICES=1
       - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+    tty: true  # 分配伪终端
     deploy:
       resources:
         reservations:
