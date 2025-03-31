@@ -67,9 +67,9 @@ WORKDIR /code
 COPY . /code
 
 # 确保缓存目录存在
+# 链接huggingface缓存
 RUN mkdir -p /root/.cache/huggingface/hub && \
-    # 链接huggingface缓存
-    ln -s /code/huggingface_cache /root/.cache/huggingface/hub && \
+    ln -s /code/huggingface_cache /root/.cache/huggingface/hub
 
 # 升级 pip 并安装 Python 依赖：
 RUN pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
