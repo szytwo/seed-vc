@@ -1,19 +1,19 @@
 import argparse
+import os
+import time
+from math import log10
+
 import gradio as gr
 import librosa
 import numpy as np
-import os
-import time
 import torch
 import torchaudio
 import uvicorn
 import yaml
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, File, UploadFile, Request
+from fastapi import FastAPI, File, UploadFile
 from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, PlainTextResponse, FileResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
-from math import log10
 from pydub import AudioSegment
 from pydub.effects import normalize
 from starlette.middleware.cors import CORSMiddleware  # 引入 CORS中间件模块
@@ -28,7 +28,7 @@ from modules.commons import build_model, load_checkpoint, recursive_munch
 # device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-result_dir = 'reconstructed'
+result_dir = 'results'
 
 
 def load_models(f0_condition):
@@ -204,6 +204,7 @@ def clear_cuda_cache():
 origins = ["*"]  # "*"，即为所有。
 
 app = FastAPI(docs_url=None)
+# noinspection PyTypeChecker
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,  # 设置允许的origins来源
@@ -536,7 +537,6 @@ def voice_conversion_save(source, target, output, diffusion_steps, length_adjust
             volume_multiplier = 1.0  # 音量倍数
             # 安全地增加音量
             audio_with_increased_volume = increase_volume_safely(audio_segment, volume_multiplier)
-
             audio_with_increased_volume.export(output, format="wav")
 
         logging.info(f"write: {output}")
@@ -555,7 +555,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", type=str, default="./examples/source/source_s1.wav")
     parser.add_argument("--target", type=str, default="./examples/reference/s1p1.wav")
-    parser.add_argument("--output", type=str, default="./reconstructed/audio.wav")
+    parser.add_argument("--output", type=str, default="./results/audio.wav")
     parser.add_argument("--diffusion-steps", type=int, default=60)
     parser.add_argument("--length-adjust", type=float, default=1.0)
     parser.add_argument("--inference-cfg-rate", type=float, default=0.7)
