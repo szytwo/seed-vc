@@ -3,15 +3,16 @@ networks:
     driver: bridge
 
 services:
-  latentsync:
-    image: latentsync:latest
-    container_name: latentsync
+  seed-vc:
+    image: seed-vc:latest
+    container_name: seed-vc
     restart: always
     runtime: nvidia
     privileged: true
     volumes:
-      - d:/AI/LatentSync/results:/code/results
-      - d:/AI/LatentSync/error:/code/error
+      - d:/AI/seed-vc/results:/code/results
+      - d:/AI/seed-vc/error:/code/error
+      - d:/AI/seed-vc/logs:/code/logs
     environment:
       - PYTHONUNBUFFERED=1 # 取消标准输出缓冲
       - CUDA_VISIBLE_DEVICES=1
@@ -22,9 +23,9 @@ services:
           devices:
             - driver: nvidia
               capabilities: [ gpu ]
-    shm_size: '32g'
+    shm_size: '16g'
     ports:
-      - '7810:7810'
-    command: python /code/api.py --num_frames 24
+      - '7869:7869'
+    command: python /code/api.py --api True
     networks:
       - ai_network
