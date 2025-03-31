@@ -37,3 +37,5 @@ ruff.log
 
 go-api.bat
 go-api-conda.bat
+/nvidia/
+/openai/
