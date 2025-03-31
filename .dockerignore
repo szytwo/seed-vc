@@ -27,6 +27,8 @@ __pycache__/
 /error/
 /wheels/win/
 /deploy/
+/reconstructed/
+/logs/
 
 # data files
 *.bat

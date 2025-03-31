@@ -29,6 +29,8 @@ results/
 error/
 venv/
 example/
+logs/
+wheels/
 
 go-api.bat
 go-api-conda.bat

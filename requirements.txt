@@ -18,3 +18,4 @@ soundfile
 sounddevice
 modelscope
 funasr
+langdetect

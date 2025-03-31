@@ -1,5 +1,5 @@
 # 使用 PyTorch 官方 CUDA 12.1 运行时镜像
-FROM pytorch/pytorch:2.2.2-cuda12.1-cudnn8-runtime
+FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
 
 # 设置容器内工作目录为 /workspace
 WORKDIR /workspace
@@ -66,21 +66,15 @@ WORKDIR /code
 # 将项目源代码复制到容器中
 COPY . /code
 
-# 确保缓存目录存在
-RUN mkdir -p /root/.cache/torch/hub/checkpoints && \
-    ln -s /code/checkpoints/auxiliary/2DFAN4-cd938726ad.zip /root/.cache/torch/hub/checkpoints/2DFAN4-cd938726ad.zip && \
-    ln -s /code/checkpoints/auxiliary/s3fd-619a316812.pth /root/.cache/torch/hub/checkpoints/s3fd-619a316812.pth && \
-    ln -s /code/checkpoints/auxiliary/vgg16-397923af.pth /root/.cache/torch/hub/checkpoints/vgg16-397923af.pth
-
 # 升级 pip 并安装 Python 依赖：
 RUN pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
-    && pip install -r api_requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple \
+    && pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple \
     && rm -rf /wheels
 
 # 暴露容器端口
 EXPOSE 22
 EXPOSE 80
-EXPOSE 7810
+EXPOSE 7869
 
 # 容器启动时执行 api.py
 # CMD ["python", "api.py"]

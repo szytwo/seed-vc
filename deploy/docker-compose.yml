@@ -1,0 +1,30 @@
+networks:
+  ai_network:
+    driver: bridge
+
+services:
+  latentsync:
+    image: latentsync:latest
+    container_name: latentsync
+    restart: always
+    runtime: nvidia
+    privileged: true
+    volumes:
+      - d:/AI/LatentSync/results:/code/results
+      - d:/AI/LatentSync/error:/code/error
+    environment:
+      - PYTHONUNBUFFERED=1 # 取消标准输出缓冲
+      - CUDA_VISIBLE_DEVICES=1
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [ gpu ]
+    shm_size: '32g'
+    ports:
+      - '7810:7810'
+    command: python /code/api.py --num_frames 24
+    networks:
+      - ai_network
