@@ -1,18 +1,12 @@
 import os
 
-import numpy as np
-
 os.environ['HF_HUB_CACHE'] = './checkpoints/hf_cache'
-import shutil
 import warnings
-import argparse
-import torch
 import yaml
 
 warnings.simplefilter('ignore')
 
 # load packages
-import random
 
 from modules.commons import *
 import time
@@ -23,10 +17,11 @@ from modules.commons import str2bool
 
 from hf_utils import load_custom_model_from_hf
 
-
 # Load model and configuration
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 fp16 = False
+
+
 def load_models(args):
     global fp16
     fp16 = args.fp16
@@ -229,9 +224,11 @@ def load_models(args):
         mel_fn_args,
     )
 
+
 def adjust_f0_semitones(f0_sequence, n_semitones):
     factor = 2 ** (n_semitones / 12)
     return f0_sequence * factor
+
 
 def crossfade(chunk1, chunk2, overlap):
     fade_out = np.cos(np.linspace(0, np.pi / 2, overlap)) ** 2
@@ -241,6 +238,7 @@ def crossfade(chunk1, chunk2, overlap):
     else:
         chunk2[:overlap] = chunk2[:overlap] * fade_in + chunk1[-overlap:] * fade_out
     return chunk2
+
 
 @torch.no_grad()
 def main(args):
@@ -341,12 +339,12 @@ def main(args):
 
     # Length regulation
     cond, _, codes, commitment_loss, codebook_loss = model.length_regulator(S_alt, ylens=target_lengths,
-                                                                                       n_quantizers=3,
-                                                                                       f0=shifted_f0_alt)
+                                                                            n_quantizers=3,
+                                                                            f0=shifted_f0_alt)
     prompt_condition, _, codes, commitment_loss, codebook_loss = model.length_regulator(S_ori,
-                                                                                       ylens=target2_lengths,
-                                                                                       n_quantizers=3,
-                                                                                       f0=F0_ori)
+                                                                                        ylens=target2_lengths,
+                                                                                        n_quantizers=3,
+                                                                                        f0=F0_ori)
 
     max_source_window = max_context_window - mel2.size(2)
     # split source condition (cond) into chunks
@@ -360,9 +358,9 @@ def main(args):
         with torch.autocast(device_type=device.type, dtype=torch.float16 if fp16 else torch.float32):
             # Voice Conversion
             vc_target = model.cfm.inference(cat_condition,
-                                                       torch.LongTensor([cat_condition.size(1)]).to(mel2.device),
-                                                       mel2, style2, None, diffusion_steps,
-                                                       inference_cfg_rate=inference_cfg_rate)
+                                            torch.LongTensor([cat_condition.size(1)]).to(mel2.device),
+                                            mel2, style2, None, diffusion_steps,
+                                            inference_cfg_rate=inference_cfg_rate)
             vc_target = vc_target[:, :, mel2.size(-1):]
         vc_wave = vocoder_fn(vc_target.float()).squeeze()
         vc_wave = vc_wave[None, :]
@@ -393,14 +391,16 @@ def main(args):
     source_name = os.path.basename(source).split(".")[0]
     target_name = os.path.basename(target_name).split(".")[0]
     os.makedirs(args.output, exist_ok=True)
-    torchaudio.save(os.path.join(args.output, f"vc_{source_name}_{target_name}_{length_adjust}_{diffusion_steps}_{inference_cfg_rate}.wav"), vc_wave.cpu(), sr)
+    torchaudio.save(os.path.join(args.output,
+                                 f"vc_{source_name}_{target_name}_{length_adjust}_{diffusion_steps}_{inference_cfg_rate}.wav"),
+                    vc_wave.cpu(), sr)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", type=str, default="./examples/source/source_s1.wav")
     parser.add_argument("--target", type=str, default="./examples/reference/s1p1.wav")
-    parser.add_argument("--output", type=str, default="./reconstructed")
+    parser.add_argument("--output", type=str, default="./results")
     parser.add_argument("--diffusion-steps", type=int, default=30)
     parser.add_argument("--length-adjust", type=float, default=1.0)
     parser.add_argument("--inference-cfg-rate", type=float, default=0.7)
