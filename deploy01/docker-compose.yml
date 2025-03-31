@@ -1,0 +1,33 @@
+networks:
+  ai_network-01:
+    driver: bridge
+
+services:
+  seed-vc-01:
+    image: seed-vc:latest
+    container_name: seed-vc-01
+    restart: always
+    runtime: nvidia
+    privileged: true
+    volumes:
+      - d:/AI/seed-vc/results01:/code/results
+      - d:/AI/seed-vc/error01:/code/error
+      - d:/AI/seed-vc/logs01:/code/logs
+    environment:
+      - TQDM_DISABLE=1 # 全局关闭进度条显示
+      - PYTHONUNBUFFERED=1 # 取消标准输出缓冲
+      - CUDA_VISIBLE_DEVICES=3
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+    tty: true  # 分配伪终端
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [ gpu ]
+    shm_size: '16g'
+    ports:
+      - '17869:7869'
+    command: python /code/api.py --api True
+    networks:
+      - ai_network-01
