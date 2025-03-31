@@ -66,6 +66,11 @@ WORKDIR /code
 # 将项目源代码复制到容器中
 COPY . /code
 
+# 确保缓存目录存在
+RUN mkdir -p /root/.cache/huggingface/hub && \
+    # 链接huggingface缓存
+    ln -s /code/huggingface_cache /root/.cache/huggingface/hub && \
+
 # 升级 pip 并安装 Python 依赖：
 RUN pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
     && pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple \
