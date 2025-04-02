@@ -187,6 +187,7 @@ def clear_cuda_cache():
     """
     if torch.cuda.is_available():
         logging.info("Clearing GPU memory...")
+        
         torch.cuda.empty_cache()
         torch.cuda.ipc_collect()
 
@@ -256,7 +257,7 @@ async def do(source: UploadFile = File(...)
              , inference_cfg_rate: float = 0.7
              , f0_condition: bool = False
              , auto_f0_adjust: bool = False
-             , semi_tone_shift: int = 0):
+             , pitch_shift: int = 0):
     # 记录开始时间
     start_time = time.time()
 
@@ -271,7 +272,7 @@ async def do(source: UploadFile = File(...)
     with open(target_path, "wb") as f:
         f.write(await target.read())
 
-    output_path = voice_conversion_save(
+    voice_conversion_save(
         source=source_path,
         target=target_path,
         output=output_path,
@@ -280,7 +281,7 @@ async def do(source: UploadFile = File(...)
         inference_cfg_rate=inference_cfg_rate,
         f0_condition=f0_condition,
         auto_f0_adjust=auto_f0_adjust,
-        semi_tone_shift=semi_tone_shift
+        pitch_shift=pitch_shift
     )
 
     # 计算耗时
@@ -298,14 +299,35 @@ async def download(name: str):
 
 @torch.no_grad()
 @torch.inference_mode()
-def voice_conversion(source, target, diffusion_steps, length_adjust, inference_cfg_rate, f0_condition, auto_f0_adjust,
-                     pitch_shift):
+def voice_conversion(
+        source,
+        target,
+        diffusion_steps,
+        length_adjust,
+        inference_cfg_rate,
+        f0_condition,
+        auto_f0_adjust,
+        pitch_shift
+):
     logging.info(
         f"Source: {source}, Target: {target}, Diffusion Steps: {diffusion_steps}, "
         f"Length Adjust: {length_adjust}, Inference CFG Rate: {inference_cfg_rate}, "
         f"F0 Condition: {f0_condition}, Auto F0 Adjust: {auto_f0_adjust}, "
         f"Pitch Shift: {pitch_shift}"
     )
+
+    (
+        inference_module,
+        mel_fn,
+        bigvgan_fn,
+        sr_fn,
+        hop_length_fn,
+        whisper_feature_extractor,
+        whisper_model,
+        campplus_model,
+        rmvpe,
+        speechtokenizer_set
+    ) = load_models(f0_condition)
 
     # streaming and chunk processing related params
     max_context_window = sr_fn // hop_length_fn * 30
@@ -478,6 +500,7 @@ def voice_conversion(source, target, diffusion_steps, length_adjust, inference_c
     # split source condition (cond) into chunks
     processed_frames = 0
     generated_wave_chunks = []
+    previous_chunk = None
 
     logging.info(f"generate chunk by chunk and stream the output...")
 
@@ -528,16 +551,32 @@ def increase_volume_safely(audio, volume_multiplier=1.0):
     return audio
 
 
-def voice_conversion_save(source, target, output, diffusion_steps, length_adjust, inference_cfg_rate, f0_condition,
-                          auto_f0_adjust, semi_tone_shift):
+def voice_conversion_save(
+        source,
+        target,
+        output,
+        diffusion_steps,
+        length_adjust,
+        inference_cfg_rate,
+        f0_condition,
+        auto_f0_adjust,
+        pitch_shift
+):
     try:
         # 检查文件是否存在，若存在则删除
         if os.path.exists(output):
             os.remove(output)
 
-        generated_wave_chunks, sr_fn = voice_conversion(source, target, diffusion_steps, length_adjust,
-                                                        inference_cfg_rate, f0_condition, auto_f0_adjust,
-                                                        semi_tone_shift)
+        generated_wave_chunks, sr_fn = voice_conversion(
+            source=source,
+            target=target,
+            diffusion_steps=diffusion_steps,
+            length_adjust=length_adjust,
+            inference_cfg_rate=inference_cfg_rate,
+            f0_condition=f0_condition,
+            auto_f0_adjust=auto_f0_adjust,
+            pitch_shift=pitch_shift
+        )
 
         # 如果已经生成了全部音频，返回拼接后的音频
         if len(generated_wave_chunks) > 0:
@@ -571,10 +610,9 @@ def voice_conversion_save(source, target, output, diffusion_steps, length_adjust
         # 删除过期文件
         delete_old_files_and_folders(result_dir, 1)
         clear_cuda_cache()
-    return output
 
 
-if __name__ == "__main__":
+def get_main_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", type=str, default="./examples/source/source_s1.wav")
     parser.add_argument("--target", type=str, default="./examples/reference/s1p1.wav")
@@ -584,30 +622,31 @@ if __name__ == "__main__":
     parser.add_argument("--inference-cfg-rate", type=float, default=0.7)
     parser.add_argument("--f0-condition", type=bool, default=False)
     parser.add_argument("--auto-f0-adjust", type=bool, default=False)
-    parser.add_argument("--semi-tone-shift", type=int, default=0)
+    parser.add_argument("--pitch_shift", type=int, default=0)
     parser.add_argument("--api", type=bool, default=False)
     parser.add_argument("--port", type=int, default=7869)
     # parser.add_argument("--webui",type=bool,default=False)
 
+    return parser.parse_args()  # ✅ 每次调用都解析参数
+
+
+if __name__ == "__main__":
     try:
-        args = parser.parse_args()
+        argsMain = get_main_args()
 
-        inference_module, mel_fn, bigvgan_fn, sr_fn, hop_length_fn, whisper_feature_extractor, whisper_model, campplus_model, rmvpe, speechtokenizer_set = load_models(
-            args.f0_condition)
-
-        if args.api:
-            uvicorn.run(app, host="0.0.0.0", port=args.port)
+        if argsMain.api:
+            uvicorn.run(app, host="0.0.0.0", port=argsMain.port)
         else:
             voice_conversion_save(
-                source=args.source,
-                target=args.target,
-                output=args.output,
-                diffusion_steps=args.diffusion_steps,
-                length_adjust=args.length_adjust,
-                inference_cfg_rate=args.inference_cfg_rate,
-                f0_condition=args.f0_condition,
-                auto_f0_adjust=args.auto_f0_adjust,
-                semi_tone_shift=args.semi_tone_shift
+                source=argsMain.source,
+                target=argsMain.target,
+                output=argsMain.output,
+                diffusion_steps=argsMain.diffusion_steps,
+                length_adjust=argsMain.length_adjust,
+                inference_cfg_rate=argsMain.inference_cfg_rate,
+                f0_condition=argsMain.f0_condition,
+                auto_f0_adjust=argsMain.auto_f0_adjust,
+                pitch_shift=argsMain.pitch_shift
             )
 
     except Exception as ex:
