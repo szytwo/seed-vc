@@ -2,9 +2,6 @@
 # https://hub.docker.com/r/pytorch/pytorch/tags
 FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
 
-# 设置容器内工作目录为 /workspace
-WORKDIR /workspace
-
 # 替换软件源为清华镜像
 RUN sed -i 's|archive.ubuntu.com|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list && \
     sed -i 's|security.ubuntu.com|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list
