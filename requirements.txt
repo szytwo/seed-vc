@@ -12,7 +12,7 @@ gradio
 pydub
 resemblyzer
 jiwer
-transformers
+transformers==4.46.1
 FreeSimpleGUI
 soundfile
 sounddevice
