@@ -4,7 +4,7 @@ networks:
 
 services:
   seed-vc:
-    image: seed-vc:latest
+    image: seed-vc:1.0
     container_name: seed-vc
     restart: always
     runtime: nvidia

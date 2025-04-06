@@ -11,6 +11,7 @@ RUN sed -i 's|archive.ubuntu.com|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/source
 
 # 防止交互式安装，完全不交互，使用默认值
 ENV DEBIAN_FRONTEND=noninteractive
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 # 设置时区
 ENV TZ=Asia/Shanghai
 
@@ -30,23 +31,6 @@ RUN apt-get update && \
 # 设置时区
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
     && echo $TZ > /etc/timezone
-
-# 安装 Python 3.10.16 到自定义路径
-# 使用 update-alternatives 设置 Python 3.10.16 为默认 Python 版本
-# https://mirrors.aliyun.com/python-release/
-COPY wheels/linux/Python-3.10.16.tgz .
-
-RUN tar -xzf Python-3.10.16.tgz \
-    && cd Python-3.10.16 \
-    && ./configure --prefix=/usr/local/python3.10.16 --enable-optimizations \
-    && make -j$(nproc) && make altinstall \
-    && cd .. \
-    && rm -rf Python-3.10.16 Python-3.10.16.tgz \
-    && update-alternatives --install /usr/bin/python3 python3 /usr/local/python3.10.16/bin/python3.10 1 \
-    && update-alternatives --install /usr/bin/pip3 pip3 /usr/local/python3.10.16/bin/pip3.10 1
-
-# 验证 Python 和 pip 版本
-# RUN python --version && pip --version
 
 # 下载并解压 FFmpeg
 # https://www.johnvansickle.com/ffmpeg
@@ -70,7 +54,7 @@ COPY . /code
 # 升级 pip 并安装 Python 依赖：
 RUN pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
     && pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple \
-    && rm -rf /wheels
+    && rm -rf wheels
 
 # 暴露容器端口
 EXPOSE 22
