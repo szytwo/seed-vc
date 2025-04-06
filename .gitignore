@@ -29,10 +29,13 @@ ruff.log
 *.whl
 
 /results/
+/results01/
 /error/
+/error01/
 /venv/
 /examples/test/
 /logs/
+/logs01/
 /wheels/
 
 go-api.bat

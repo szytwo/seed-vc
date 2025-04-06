@@ -24,12 +24,16 @@ __pycache__/
 # folders
 /venv/
 /results/
+/results01/
 /error/
+/error01/
 /wheels/win/
 /deploy/
 /deploy01/
 /reconstructed/
 /logs/
+/logs01/
+/examples/test/
 
 # data files
 *.bat
